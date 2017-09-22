@@ -1,0 +1,9 @@
+name: CelestialChallenge
+version: 0.1
+author: Powderboarder
+main: us.powderboarder.celestialChallenge.Main
+
+commands:
+  claim:
+    description: Claim weekly and daily rewards
+    usage: /celestialChallenge:claim

@@ -1,0 +1,4 @@
+name: //the plugins name as it should appear in the plugin list /pl
+version: //the plugin's version
+author: //the author's name
+main: //your main class where the onEnable and onDiable methods are. (Ex: us.powderboarder.template.Main)
