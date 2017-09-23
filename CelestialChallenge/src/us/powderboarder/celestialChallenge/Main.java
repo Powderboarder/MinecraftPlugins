@@ -54,6 +54,8 @@ public class Main extends JavaPlugin {
     * */
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+
+        // TODO : Add in command for admin to reset player challenges and disable challenges.
         if (sender instanceof Player) {
             // Creates object of player which will take CommandSender information if Player
             Player player = (Player) sender;

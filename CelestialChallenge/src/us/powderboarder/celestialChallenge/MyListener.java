@@ -8,20 +8,12 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarFlag;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerStatisticIncrementEvent;
+import org.bukkit.event.player.*;
 
-import java.sql.Time;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Random;
 
 /**
@@ -39,9 +31,10 @@ public class MyListener implements Listener {
 
 
 
-    private static String daily;
+    private static String challengeTitle;
     private static String daily2;
-    private static String dailyRules;
+    private static String challengeRules;
+    private static String progressMsg;
     private static boolean dailyReward;
     private static boolean dailyRewardClaimed;
 
@@ -51,9 +44,22 @@ public class MyListener implements Listener {
     private int dropCount;
     private int playerDeathCount;
 
-    private int initialStepCount;
-    BossBar walkProgress = Bukkit.createBossBar("Steps to Goal", BarColor.BLUE, BarStyle.SEGMENTED_10, BarFlag.DARKEN_SKY, BarFlag.CREATE_FOG);
+    private static int distanceChallenge;
 
+    private static int distanceGoal;
+    private int initialStepCount;
+    private int initialBoatCount;
+    private int initialClimbCount;
+    private int initialDiveCount;
+    private int initialFallCount;
+    private int initialFlyCount;
+    private int initialJumpCount;
+    private int initialSprintCount;
+    private int initialSwimCount;
+
+
+    BossBar goalProgress = Bukkit.createBossBar("Progress to Goal - " + challengeTitle, BarColor.BLUE, BarStyle.SEGMENTED_10, BarFlag.DARKEN_SKY, BarFlag.CREATE_FOG);
+    double goalProgressBar;
 
     private long initialLoginTime;
     private long initialMoveTime;
@@ -66,12 +72,15 @@ public class MyListener implements Listener {
         event.setJoinMessage("Welcome, " + event.getPlayer().getName() + "!");
 
         // Broadcasts to all a message
-        Bukkit.broadcastMessage("The new Daily Challenge is: " + daily);
-        Bukkit.broadcastMessage("Daily Challenge Rules: " + dailyRules);
+        Bukkit.broadcastMessage("The new Daily Challenge is: " + challengeTitle);
+        Bukkit.broadcastMessage("Daily Challenge Rules: " + challengeRules);
 
-        initialStepCount = event.getPlayer().getStatistic(Statistic.WALK_ONE_CM)/100;
-        walkProgress.setProgress((0)/50);
-        walkProgress.addPlayer(event.getPlayer());
+        // Get initial player statistics values on login
+        resetChallenge(event);
+
+        // Setup goal progress bar, and add player to progress tracking
+        goalProgress.setProgress((0)/50);
+        goalProgress.addPlayer(event.getPlayer());
 
         // Get initial time of login for polling player movement every 30 secs
         initialLoginTime = event.getPlayer().getPlayerTime();
@@ -86,7 +95,7 @@ public class MyListener implements Listener {
             + event.getItemDrop());*/
 
         //Check if dropped item matches specific item
-        if (daily.equals(daily2 + " - " + randFood) && (event.getItemDrop().getItemStack().getType().equals(randFood))){
+        if (challengeTitle.equals(daily2 + " - " + randFood) && (event.getItemDrop().getItemStack().getType().equals(randFood))){
 
             // Test message to verify that item type is being tracked correctly.
             /*Bukkit.broadcastMessage(event.getPlayer().getName() + " dropped tested 1 "
@@ -115,10 +124,12 @@ public class MyListener implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
 
+        // TODO: 09/21/17 : make progress page, and test if player died my mob
         playerDeathCount ++;
 
         if (playerDeathCount == 2){
             Bukkit.broadcastMessage(event.getEntity().getDisplayName() + " has joined the river styx.");
+            Bukkit.broadcastMessage("You have lost!");
             playerDeathCount = 0;
             dailyReward = true;
         }
@@ -140,90 +151,161 @@ public class MyListener implements Listener {
             movePolling = true;
         }
 
-        // Check if daily challenge is step challenge
-        if (daily == "Step off!" && movePolling==true ) {
-            // On player move, get current measurement from server
-            int totalWalkedCM = event.getPlayer().getStatistic(Statistic.WALK_ONE_CM);
-
+        // Check if challengeTitle challenge is step challenge
+        // Counts steps and adds meter for player to track progress toward goal
+        if (distanceChallenge==1 && movePolling) {
             // Convert server measurement to total number of blocks walked.
-            int currentBlocksWalked = totalWalkedCM / 100;
+            int totalWalkDistance = (event.getPlayer().getStatistic(Statistic.WALK_ONE_CM)) / 100;
 
-            // Gets current step progress to goal - current test is 50 blocks.
-            double stepProgress = (currentBlocksWalked - initialStepCount) / 50.0;
-
-            // Updates the step overview meter bar at top.
-            walkProgress.setProgress(stepProgress);
+            getGoalProgress(totalWalkDistance, initialStepCount, distanceGoal);
+            Bukkit.broadcastMessage("Distance walked: " + totalWalkDistance);
 
             // Once step progress is 100% or more, display achievement message
-            if (stepProgress >= 1) {
-                Bukkit.broadcastMessage(event.getPlayer().getDisplayName() + " has walked the daily requirement of activity. Time to take a nap!");
-            }
+            /*if (goalProgressBar >= 1.0) {
+                Bukkit.broadcastMessage(event.getPlayer().getDisplayName() + " has walked the challengeTitle requirement of activity. Time to take a nap!");
+
+                // Sets reward availability and restarts challenge
+                resetChallenge(event);
+                dailyReward = true;
+            }*/
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalWalkDistance, event);
         }
 
-        // checks if daily message is boat races
-        //if (daily == ""){
+        // checks if challengeTitle message is boat races
+        // Counts distance travelled by boat, and give progress meter for player tracking.
+        if (distanceChallenge==2 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalBoatDistance = (event.getPlayer().getStatistic(Statistic.BOAT_ONE_CM))/100;
 
-            /*if(){
-                Bukkit.broadcastMessage(event.getPlayer().getDisplayName() + " paddled a boat!");
+            getGoalProgress(totalBoatDistance, initialBoatCount, distanceGoal);
+            Bukkit.broadcastMessage("Distance by Boat: " + totalBoatDistance);
 
+            /*if(goalProgressBar >= 1.0){
+                Bukkit.broadcastMessage(event.getPlayer().getDisplayName() + " paddled a boat " + totalBoatDistance + " blocks!");
+
+                // Sets reward availability and restarts challenge
+                resetChallenge(event);
+                dailyReward = true;
             }*/
-        //}
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalBoatDistance, event);
+        }
 
-        // checks if daily message is Mountain Climber
-        //if (daily == ""){
+        // checks if challengeTitle message is Tree Climber - Vine/ladder climb
+        // Counts the distance player has climbed by either vine or ladder, and provide progress bar for player.
+        if (distanceChallenge==3 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalClimbDistance = (event.getPlayer().getStatistic(Statistic.CLIMB_ONE_CM))/100;
-        //}
 
-        // checks if daily message is Olypmic Diver
-        //if (daily == ""){
+            getGoalProgress(totalClimbDistance, initialClimbCount, distanceGoal);
+            Bukkit.broadcastMessage("Climbed Blocks: " + totalClimbDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalClimbDistance, event);
+        }
+
+        // checks if challengeTitle message is Olypmic Diver
+        //
+        if (distanceChallenge==4 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalDiveDistance = (event.getPlayer().getStatistic(Statistic.DIVE_ONE_CM))/100;
-        //}
 
-        // checks if daily message is Sky Diver
-        //if (daily == ""){
+            getGoalProgress(totalDiveDistance, initialDiveCount, distanceGoal);
+            Bukkit.broadcastMessage("Depth dived: " + totalDiveDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalDiveDistance, event);
+        }
+
+        // checks if challengeTitle message is Sky Diver
+        //
+        if (distanceChallenge==5 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalFallDistance = (event.getPlayer().getStatistic(Statistic.FALL_ONE_CM))/100;
-        //}
 
-        // checks if daily message is Soaring Eagle
-        //if (daily == ""){
+            getGoalProgress(totalFallDistance, initialFallCount, distanceGoal);
+            Bukkit.broadcastMessage("Distance fell: " + totalFallDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalFallDistance, event);
+        }
+
+        // checks if challengeTitle message is Soaring Eagle
+        //
+        if (distanceChallenge==6 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalFlyDistance = (event.getPlayer().getStatistic(Statistic.FLY_ONE_CM))/100;
-        //}
 
-        // checks if daily message is Jump, Jump
-        //if (daily == ""){
+            getGoalProgress(totalFlyDistance, initialFlyCount, distanceGoal);
+            Bukkit.broadcastMessage("Distance flying: " + totalFlyDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalFlyDistance, event);
+        }
+
+        // checks if challengeTitle message is Jump, Jump - Counts number of jumps
+        // Counts number of times player jumps, and updates goal progress bar.
+        if (distanceChallenge==7 && movePolling){
+            // total number of jumps calculated by server
             int totalJump = event.getPlayer().getStatistic(Statistic.JUMP);
-        //}
 
-        // checks if daily message is Run Forest
-        //if (daily == ""){
+            getGoalProgress(totalJump, initialJumpCount, distanceGoal);
+            Bukkit.broadcastMessage("Total jumps: " + totalJump);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalJump, event);
+        }
+
+        // checks if challengeTitle message is Run Forest - Count number of blocks run
+        // Counts number of blocks players sprints, and updates progress bar progress.
+        if (distanceChallenge==8 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalRunDistance = (event.getPlayer().getStatistic(Statistic.SPRINT_ONE_CM))/100;
-        //}
 
-        // checks if daily message is Michael Phelps
-        //if (daily == ""){
+            getGoalProgress(totalRunDistance, initialSprintCount, distanceGoal);
+            Bukkit.broadcastMessage("Sprint Distance: " + totalRunDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalRunDistance, event);
+        }
+
+        // checks if challengeTitle message is Michael Phelps
+        if (distanceChallenge==9 && movePolling){
+            // Convert server measurement to total number of blocks
             int totalSwimDistance = (event.getPlayer().getStatistic(Statistic.SWIM_ONE_CM))/100;
-        //}
 
-        // checks if daily message is ...
-        //if (daily == ""){
+            getGoalProgress(totalSwimDistance, initialSwimCount, distanceGoal);
+            Bukkit.broadcastMessage("Distance swam: " + totalSwimDistance);
+
+            //challengeProgress(event);
+            checkGoalComplete(progressMsg, totalSwimDistance, event);
+        }
+
+        // checks if challengeTitle message is ...
+        //if (distanceChallenge== && movePolling){
 
         //}
 
     }
 
-
-
+    // TODO : Add command to allow server administrator to be able to reset daily challenges or disable challenges
     public static String setDaily(){
-        int totalChallenges = 1;
+        int totalChallenges = 11;
 
         // setup random number generator
         Random rand = new Random();
         int randNum = rand.nextInt(totalChallenges) + 1;
 
+        // Setup distance challenges goal amount
+        int minDistance = 10;
+        int maxDistance = 100;
+        distanceGoal = rand.nextInt(maxDistance) + minDistance;
+
         if (randNum == 1){
             daily2 =  "Feed the Planet";
-            dailyRules = "Player must drop a specific number of food to get reward";
+            challengeRules = "Player must drop a specific number of food to get reward";
+            progressMsg = "Total food dropped: ";
 
             // Setup new random number for use with FoodList array
             Random randMat = new Random();
@@ -240,36 +322,138 @@ public class MyListener implements Listener {
             randFood = foodItems.get(randMaterial);
 
 
-            daily = daily2 + " - " + randFood;
+            challengeTitle = daily2 + " - " + randFood;
         }
         if (randNum == 2){
-            daily = "First to Die";
-            dailyRules = "Player accumulates death to get reward";
+            challengeTitle = "First to Die";
+            challengeRules = "Player accumulates death to get reward";
+            progressMsg = "Current player deaths: ";
         }
         if (randNum == 3) {
-            daily = "Step off!";
-            dailyRules = "Player accumulates steps while walking to get reward";
+            challengeTitle = "Step off! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates steps while walking to get reward";
+            progressMsg = "Current block distance (walking): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 1;
+        }
+        if (randNum == 4) {
+            challengeTitle = "Boat Race! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of block while using a boar to get reward";
+            progressMsg = "Current block distance (by boat): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 2;
+        }
+        if (randNum == 5) {
+            challengeTitle = "Tree Climber! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of blocks while climbing vines or ladders to get reward";
+            progressMsg = "Current block distance (climbing): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 3;
+        }
+        if (randNum == 6) {
+            challengeTitle = "Olympic Diver! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of blocks while underwater to get reward";
+            progressMsg = "Current block distance (diving): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 4;
+        }
+        if (randNum == 7) {
+            challengeTitle = "Sky Diver! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of blocks while falling to get reward";
+            progressMsg = "Current block distance (falling): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 5;
+        }
+        if (randNum == 8) {
+            challengeTitle = "Soaring Eagle! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of block while flying to get reward";
+            progressMsg = "Current block distance (flying): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 6;
+        }
+        if (randNum == 9) {
+            challengeTitle = "Jump, Jump! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of jumps to get reward";
+            progressMsg = "Current jump count: ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 7;
+        }
+        if (randNum == 10) {
+            challengeTitle = "Run, Forest! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates steps while sprinting to get reward";
+            progressMsg = "Current block distance (sprinting): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 8;
+        }
+        if (randNum == 11) {
+            challengeTitle = "Michael Phelps! Challenge - " + distanceGoal + " blocks";
+            challengeRules = "Player accumulates # of blocks while swimming to get reward";
+            progressMsg = "Current block distance (swimming): ";
+
+            // Set which distance challenge to look at
+            distanceChallenge = 9;
         }
 
-        return daily;
+        return challengeTitle;
     }
 
-    private String getDateTime(){
-        // set time variable to polling every so often.
-        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-        Date date = new Date();
-        return dateFormat.format(date);
-
+    private void resetChallenge(PlayerEvent event){
+        // reset all initial variables
+        initialStepCount = event.getPlayer().getStatistic(Statistic.WALK_ONE_CM)/100;
+        initialBoatCount  = event.getPlayer().getStatistic(Statistic.BOAT_ONE_CM)/100;
+        initialClimbCount = event.getPlayer().getStatistic(Statistic.CLIMB_ONE_CM)/100;
+        initialDiveCount = event.getPlayer().getStatistic(Statistic.DIVE_ONE_CM)/100;
+        initialFallCount = event.getPlayer().getStatistic(Statistic.FALL_ONE_CM)/100;
+        initialFlyCount = event.getPlayer().getStatistic(Statistic.FLY_ONE_CM)/100;
+        initialJumpCount = event.getPlayer().getStatistic(Statistic.JUMP);
+        initialSprintCount = event.getPlayer().getStatistic(Statistic.SPRINT_ONE_CM)/100;
+        initialSwimCount = event.getPlayer().getStatistic(Statistic.SWIM_ONE_CM)/100;
     }
+    private double getGoalProgress(int totalCount, int initialCount, double totalGoal){
+        // Gets current step progress to goal - current test is 50 blocks.
+        goalProgressBar = (totalCount - initialCount) / totalGoal;
+
+        // Check if goalProgressBar is larger than 1, which will cause an exception
+        if (goalProgressBar > 1.0){
+            goalProgressBar=1.0;
+        }
+
+        // Updates the step overview meter bar at top.
+        goalProgress.setProgress(goalProgressBar);
+
+        return goalProgressBar;
+    }
+
+    private Boolean checkGoalComplete(String progressMsg, int totalCount, PlayerMoveEvent event){
+        Bukkit.broadcastMessage(progressMsg + totalCount);
+
+        if (goalProgressBar >=1.0){
+            Bukkit.broadcastMessage("You Win!");
+
+            // Sets reward availability and restarts challenge
+            resetChallenge(event);
+            dailyReward = true;
+        }
+        return dailyReward;
+    }
+
 
     public static String getDailyChallenges(){
-        return daily;
+        return challengeTitle;
     }
     public static String getDailyChallenges2(){
         return daily2;
     }
     public static String getDailyChallengeRules(){
-        return dailyRules;
+        return challengeRules;
     }
     public static boolean getDailyReward(){
         return dailyReward;
@@ -284,6 +468,15 @@ public class MyListener implements Listener {
         dailyRewardClaimed = claimed;
         return dailyRewardClaimed;
     }
+    /*public void challengeProgress(PlayerEvent event){
+        if(goalProgressBar >= 1.0){
+            Bukkit.broadcastMessage("You Win!");
+
+            // Sets reward availability and restarts challenge
+            resetChallenge(event);
+            dailyReward = true;
+        }
+    }*/
     public static ArrayList<Material> foodList() {
 
         foodItems.add(Material.APPLE);
